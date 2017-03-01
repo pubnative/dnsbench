@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 	"sync"
 	"text/tabwriter"
 	"time"
@@ -35,66 +34,89 @@ func main() {
 			wg.Wait()
 		}
 	}
-	var res []*dnsbench.DNSReport
+	var res []dnsbench.Report
 	for i := 0; i < *loop; i++ {
 		res = append(res, <-resCh)
 	}
 
 	fmt.Println("DNS Resolve")
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 0, ' ', tabwriter.Debug)
-	fmt.Fprintln(w, "tests \t errors \t min \t max \t avg \t median \t top99 \t top95 \t top90 \t ips \t")
+	fmt.Fprintln(w, "tests \t errors \t min \t max \t avg \t median \t top90 \t top95 \t top99 \t")
 	fmt.Fprintf(
 		w,
-		"%v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t\n",
+		"%v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t\n",
 		len(res), numErr(res), minDur(res), maxDur(res), avgDur(res),
-		medianDur(res), topN(res, 99), topN(res, 95), topN(res, 90), ips(res),
+		medianDur(res), topN(res, 90), topN(res, 95), topN(res, 99),
 	)
 	w.Flush()
+
+	fmt.Println("\nEstablish Connection")
+	ipReps := make(map[string][]dnsbench.Report)
+	for _, r := range res {
+		for _, rep := range r.(*dnsbench.DNSReport).ConnReps {
+			ip := rep.IP.String()
+			reps, ok := ipReps[ip]
+			if !ok {
+				reps = make([]dnsbench.Report, 0)
+			}
+			ipReps[ip] = append(reps, rep)
+		}
+	}
+	for ip, reps := range ipReps {
+		fmt.Fprintln(w, "ip \t tests \t errors \t min \t max \t avg \t median \t top90 \t top95 \t top99 \t")
+		fmt.Fprintf(
+			w,
+			"%v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t %v \t\n\n",
+			ip, len(reps), numErr(reps), minDur(reps), maxDur(reps), avgDur(reps),
+			medianDur(reps), topN(reps, 90), topN(reps, 95), topN(reps, 99),
+		)
+		w.Flush()
+	}
 }
 
-func minDur(res []*dnsbench.DNSReport) time.Duration {
+func minDur(res []dnsbench.Report) time.Duration {
 	if len(res) == 0 {
 		return 0
 	}
 
-	m := res[0].Dur
+	m := res[0].Dur()
 	for _, r := range res[1:] {
-		if r.Dur < m {
-			m = r.Dur
+		if r.Dur() < m {
+			m = r.Dur()
 		}
 	}
 
 	return m
 }
 
-func maxDur(res []*dnsbench.DNSReport) time.Duration {
+func maxDur(res []dnsbench.Report) time.Duration {
 	if len(res) == 0 {
 		return 0
 	}
 
-	m := res[0].Dur
+	m := res[0].Dur()
 	for _, r := range res[1:] {
-		if r.Dur > m {
-			m = r.Dur
+		if r.Dur() > m {
+			m = r.Dur()
 		}
 	}
 
 	return m
 }
 
-func avgDur(res []*dnsbench.DNSReport) time.Duration {
+func avgDur(res []dnsbench.Report) time.Duration {
 	if len(res) == 0 {
 		return 0
 	}
 
 	var t int
 	for _, r := range res {
-		t += int(r.Dur)
+		t += int(r.Dur())
 	}
 	return time.Duration(t / len(res))
 }
 
-func medianDur(res []*dnsbench.DNSReport) time.Duration {
+func medianDur(res []dnsbench.Report) time.Duration {
 	if len(res) == 0 {
 		return 0
 	}
@@ -103,14 +125,14 @@ func medianDur(res []*dnsbench.DNSReport) time.Duration {
 	return t[len(t)/2]
 }
 
-func topN(res []*dnsbench.DNSReport, n int) time.Duration {
+func topN(res []dnsbench.Report, n int) time.Duration {
 	if len(res) == 0 {
 		return 0
 	}
 
 	var dur []int
 	for _, r := range res {
-		dur = append(dur, int(r.Dur))
+		dur = append(dur, int(r.Dur()))
 	}
 	sort.Ints(dur)
 
@@ -118,10 +140,10 @@ func topN(res []*dnsbench.DNSReport, n int) time.Duration {
 	return time.Duration(dur[idx])
 }
 
-func sorted(res []*dnsbench.DNSReport) []time.Duration {
+func sorted(res []dnsbench.Report) []time.Duration {
 	var dur []int
 	for _, r := range res {
-		dur = append(dur, int(r.Dur))
+		dur = append(dur, int(r.Dur()))
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(dur)))
 
@@ -132,26 +154,10 @@ func sorted(res []*dnsbench.DNSReport) []time.Duration {
 	return r
 }
 
-func ips(res []*dnsbench.DNSReport) string {
-	var str []string
-	de := make(map[string]bool)
-	for _, r := range res {
-		for _, cr := range r.ConnReps {
-			s := cr.IP.String()
-			if _, ok := de[s]; !ok {
-				str = append(str, s)
-				de[s] = true
-			}
-
-		}
-	}
-	return strings.Join(str, " ")
-}
-
-func numErr(res []*dnsbench.DNSReport) int {
+func numErr(res []dnsbench.Report) int {
 	n := 0
 	for _, r := range res {
-		if r.Err != nil {
+		if r.Err() != nil {
 			n += 1
 		}
 	}

@@ -7,30 +7,46 @@ import (
 )
 
 type DNSReport struct {
-	Dur      time.Duration
 	ConnReps []ConnReport
-	Err      error
+	dur      time.Duration
+	err      error
 }
 
 type ConnReport struct {
-	Dur time.Duration
 	IP  net.IP
-	Err error
+	dur time.Duration
+	err error
+}
+
+type Report interface {
+	Dur() time.Duration
+	Err() error
 }
 
 var dialer = &net.Dialer{}
+
+var _ Report = (*DNSReport)(nil)
+var _ Report = (*ConnReport)(nil)
 
 func NewDNSReport(host string) *DNSReport {
 	now := time.Now()
 	ips, err := net.LookupIP(host)
 	rep := &DNSReport{
-		Dur: time.Since(now),
-		Err: err,
+		dur: time.Since(now),
+		err: err,
 	}
 	if err == nil {
 		rep.setConnReport(ips)
 	}
 	return rep
+}
+
+func (r *DNSReport) Dur() time.Duration {
+	return r.dur
+}
+
+func (r *DNSReport) Err() error {
+	return r.err
 }
 
 func (r *DNSReport) setConnReport(ips []net.IP) {
@@ -41,12 +57,20 @@ func (r *DNSReport) setConnReport(ips []net.IP) {
 		now := time.Now()
 		conn, err := dialer.DialContext(ctx, "tcp", ip)
 		reps[i] = ConnReport{
-			Dur: time.Since(now),
+			dur: time.Since(now),
+			err: err,
 			IP:  ips[i],
-			Err: err,
 		}
 		conn.Close()
 	}
 
 	r.ConnReps = reps
+}
+
+func (r ConnReport) Dur() time.Duration {
+	return r.dur
+}
+
+func (r ConnReport) Err() error {
+	return r.err
 }
