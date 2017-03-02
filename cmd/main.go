@@ -13,7 +13,7 @@ import (
 )
 
 var host = flag.String("h", "", "Hostname")
-var loop = flag.Int("n", 1, "Number of lookups")
+var loop = flag.Int("n", 0, "Number of lookups")
 
 func init() {
 	os.Setenv("GODEBUG", "netdns=go")
@@ -39,7 +39,7 @@ func main() {
 		res = append(res, <-resCh)
 	}
 
-	fmt.Println("DNS Resolve")
+	fmt.Printf("DNS Resolve %s\n", *host)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 0, ' ', tabwriter.Debug)
 	fmt.Fprintln(w, "tests \t errors \t min \t max \t avg \t median \t top90 \t top95 \t top99 \t")
 	fmt.Fprintf(
