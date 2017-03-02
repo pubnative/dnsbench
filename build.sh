@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-go build cmd/main.go
+env GOOS=linux GOARCH=amd64 go build -v cmd/main.go
 mv main dnsbench
