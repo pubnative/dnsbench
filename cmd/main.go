@@ -130,6 +130,10 @@ func topN(res []dnsbench.Report, n int) time.Duration {
 		return 0
 	}
 
+	if len(res) == 1 {
+		return res[0].Dur()
+	}
+
 	var dur []int
 	for _, r := range res {
 		dur = append(dur, int(r.Dur()))
