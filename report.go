@@ -3,7 +3,10 @@ package dnsbench
 import (
 	"context"
 	"net"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type DNSReport struct {
@@ -29,6 +32,7 @@ var _ Report = (*DNSReport)(nil)
 var _ Report = (*ConnReport)(nil)
 
 func NewDNSReport(host string) *DNSReport {
+	host = formatHost(host)
 	now := time.Now()
 	ips, err := net.LookupIP(host)
 	rep := &DNSReport{
@@ -73,4 +77,14 @@ func (r ConnReport) Dur() time.Duration {
 
 func (r ConnReport) Err() error {
 	return r.err
+}
+
+func formatHost(h string) string {
+	if !strings.HasPrefix(h, "*") {
+		return h
+	}
+
+	u := uuid.New().String()
+	h = u + h[1:]
+	return h
 }
